@@ -11,39 +11,44 @@ void getNextLexeme() { // Функция получения следующей �
     std::cin >> currentLex;
 }
 
-void parseExpr() {
+void parseE() {
     if ( currentLex == '1' || currentLex == '0' ) {
         getNextLexeme();     
     } else if ( currentLex == '!' ) {
         getNextLexeme();
-        parseExpr();
+        
+        parseE(); // Операнд
     } else if ( currentLex == '(' ) {
         getNextLexeme();
-        parseExpr();
-        if ( currentLex != '&' )
-            throw currentLex;
+        
+        parseE(); // Первый операнд
+        
+        if ( currentLex != '&' ) // Проверяем знак операции
+            throw "& needed";
         getNextLexeme();
-        parseExpr();
-        if ( currentLex != ')' )
-            throw currentLex;
+        
+        parseE(); // Второй операнд
+        
+        if ( currentLex != ')' ) // Проверяем закрывающую скобку
+            throw ") needed";
         getNextLexeme();
     } else {
-        throw currentLex;
+        throw "Start of expression needed";
     }
 }
 
-void parseGrammar() {
-    parseExpr();
+void parseS() {
+    parseE();
     if ( currentLex != '$' ) // Проверяем конец цепочки
-        throw currentLex;
+        throw "End of line needed";
 }
 
 int main(int argc, char ** argv) {
     try {
         getNextLexeme(); // Считываем первую лексему
-        parseGrammar(); // Парсим выражение
+        parseS(); // Парсим выражение
         std::cout << "Parsed" << std::endl;
-    } catch ( Lexeme lex ) {
-        std::cout << "Error parsing: " << lex << std::endl;
+    } catch ( const char * err ) {
+        std::cout << "Error: " << err << ", but " << currentLex << " got." << std::endl;
     }
 }
