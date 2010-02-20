@@ -14,13 +14,17 @@ void getNextLexeme() { // Функция получения следующей �
  
 void parseE() {
     if ( isdigit(currentLex) ) {
-        std::cout << currentLex << " ";
+        std::cout << currentLex << " "; // Выводим цифру на печать
         
         getNextLexeme();
     } else if ( currentLex == '!' ) {
+        Lexeme operation = currentLex; // Запоминаем текущую операцию
+        
         getNextLexeme();
         
         parseE(); // Операнд
+        
+        std::cout << operation << " "; // Выводим операцию
     } else if ( currentLex == '(' ) {
         getNextLexeme();
         
@@ -29,7 +33,7 @@ void parseE() {
         if ( currentLex != '+' && currentLex != '*' ) // Проверяем знак операции
             throw "& needed";
         
-        Lexeme op = currentLex;
+        Lexeme operation = currentLex; // Запоминаем текущую операцию
         
         getNextLexeme();        
         
@@ -40,7 +44,7 @@ void parseE() {
         
         getNextLexeme();
         
-        std::cout << op << " ";
+        std::cout << operation << " "; // Выводим операцию
     } else {
         throw "Start of expression needed";
     }
