@@ -17,14 +17,6 @@ void parseE() {
         std::cout << currentLex << " "; // Выводим цифру на печать
         
         getNextLexeme();
-    } else if ( currentLex == '!' ) {
-        Lexeme operation = currentLex; // Запоминаем текущую операцию
-        
-        getNextLexeme();
-        
-        parseE(); // Операнд
-        
-        std::cout << operation << " "; // Выводим операцию
     } else if ( currentLex == '(' ) {
         getNextLexeme();
         
