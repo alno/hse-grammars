@@ -25,6 +25,7 @@ enum LexType {
 enum LexDelims {
     LEX_DEL_NULL, // Для ошибки
     LEX_DEL_ADD, // Операция "+"
+    LEX_DEL_SUB, // Операция "-", не важно бинарный или унарный
     LEX_DEL_MUL, // Операция "*"
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE // Закрывающая скобка
@@ -35,6 +36,7 @@ enum LexDelims {
 const char * LEX_DELIMS[] = {
     "",
     "+",
+    "-", // Строка для минуса
     "*",
     "(",
     ")",
@@ -95,7 +97,7 @@ void gc() { // Функция чтения следующего символа
 А это регулярная грамматика, на основе которой производится разбор, здесь
 \d обозначает цифру, а \s пробельный символ (по аналогии с регулярными выражениями):
  
-S -> \d N | + | * | ) | ( | $ | \s S
+S -> \d N | + | - | * | ) | ( | $ | \s S
 N -> \d N |
 
 Первая альтернатива в S - выделение чисел, далее - разделители и конец
@@ -121,7 +123,7 @@ Lexeme readNextLexeme() {
                     buf += currentChar; // Тогда добавляем ее в буфер-накопитель лексемы
                     gc(); // Считываем следующий символ
                     currentState = N; // И переходим в состояние N - для числовых констант
-                } else if ( currentChar == '+' || currentChar == '*' || currentChar == '(' || currentChar == ')' ) { // Если же это односимвольный разделитель
+                } else if ( currentChar == '+' || currentChar == '-' || currentChar == '*' || currentChar == '(' || currentChar == ')' ) { // Если же это односимвольный разделитель
                     buf += currentChar; // То добавляем его в строку-буфер
                     gc(); // Считываем следующий символ
                     
@@ -185,7 +187,7 @@ void parseE() {
         
         parseE(); // Первый операнд
         
-        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL ) ) // Проверяем знак операции
+        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL && currentLex.index != LEX_DEL_SUB ) ) // Проверяем знак операции
             throw "& needed";
         
         Lexeme operation = currentLex; // Запоминаем текущую операцию
@@ -237,6 +239,9 @@ int calculate() {
                         break;
                     case LEX_DEL_MUL:
                         stack.push( v1 * v2 ); // Кладем в стек результат умножения
+                        break;
+                    case LEX_DEL_SUB:
+                        stack.push( v1 - v2 ); // Кладем в стек результат разности
                         break;
                     default:
                         throw "Unknown binary operation"; // Неизвестная бинарная операция
