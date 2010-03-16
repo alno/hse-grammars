@@ -158,7 +158,8 @@ class Operation {
 public:
     enum Type {
         CONST, // Операция загрузки константы в стек
-        BINARY // Бинарная операция
+        BINARY, // Бинарная операция
+        UNARY // Унарная операция
     };
     
     Operation( int type, int data ) : type( type ), data( data ) {}
@@ -182,6 +183,13 @@ void parseE() {
         program.push_back( Operation( Operation::CONST, currentLex.value ) ); // Добавляем константу в код программы
         
         getNextLexeme();
+    } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_SUB ) { // Если текущая лексема - минус
+        Lexeme operation = currentLex; // Запоминаем текущую операцию
+
+        getNextLexeme(); // Считываем следующую лексему
+        parseE(); // И разбираем выражение-аргумент
+
+        program.push_back( Operation( Operation::UNARY, operation.index ) ); // Добавляем операцию (унарный минус) в ПОЛИЗ
     } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_BROPEN ) { // Если текущая лексема - скобка
         getNextLexeme();
         
@@ -245,6 +253,20 @@ int calculate() {
                         break;
                     default:
                         throw "Unknown binary operation"; // Неизвестная бинарная операция
+                }
+                break;
+            }
+            case Operation::UNARY: // Для унарной операции
+            {
+                int v1 = stack.top(); // Получаем первый аргумент из стека
+                stack.pop(); // И удаляем его из стека
+
+                switch ( op.data ) { // В зависимости от конкретной операции
+                    case LEX_DEL_SUB:
+                        stack.push( -v1 ); // Кладем в стек результат применения минуса
+                        break;
+                    default:
+                        throw "Unknown unary operation"; // Неизвестная бинарная операция
                 }
                 break;
             }
