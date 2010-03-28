@@ -33,7 +33,9 @@ enum LexDelims {
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE, // Закрывающая скобка
     LEX_DEL_EQUALS, // Знак равенства
-    LEX_DEL_SEMICOLON // Точка с запятой
+    LEX_DEL_SEMICOLON, // Точка с запятой
+    LEX_DEL_LESS, // Меньше
+    LEX_DEL_MORE // Больше
 };
  
 /* Перечисляем как записываются разделители - опять же порядок совпадает
@@ -47,6 +49,8 @@ const char * LEX_DELIMS[] = {
     ")",
     "=",
     ";",
+    "<", // Сравнение на меньше
+    ">", // Сравнение на меньше
     0 // Заканчиваем список нулем, чтобы при поиске определять по нему конец
 };
 
@@ -230,12 +234,20 @@ int findVariable( const std::string & var ) {
     return -1;
 }
 
+/* Тип выражения */
+enum ExpType {
+    EXP_INT,
+    EXP_BOOL
+};
+
 /* Разбор выражения */
-void parseE() {
+ExpType parseE() {
     if ( currentLex.type == LEX_NUMBER ) { // Если текущая лексема - число
         program.push_back( Operation( Operation::CONST, currentLex.value ) ); // Добавляем константу в код программы
         
         getNextLexeme();
+        
+        return EXP_INT; // Константы всегда целочисленные
     } else if ( currentLex.type == LEX_VAR ) { // Текущая лексема - переменная
         int varIndex = findVariable( currentLex.buf ); // Находим переменную в списке объявленных
         
@@ -244,27 +256,34 @@ void parseE() {
         
         program.push_back( Operation( Operation::VAR, varIndex ) );
         
-        getNextLexeme();       
+        getNextLexeme();
+        
+        return EXP_INT; // Переменные считаем всегда целочисленными
     } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_SUB ) { // Если текущая лексема - минус
         Lexeme operation = currentLex; // Запоминаем текущую операцию
 
         getNextLexeme(); // Считываем следующую лексему
-        parseE(); // И разбираем выражение-аргумент
+        ExpType argType = parseE(); // И разбираем выражение-аргумент
+        
+        if ( argType != EXP_INT )
+            throw "Int expression required";
 
         program.push_back( Operation( Operation::UNARY, operation.index ) ); // Добавляем операцию (унарный минус) в ПОЛИЗ
+        
+        return EXP_INT; // Унарный минус дает целое число
     } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_BROPEN ) { // Если текущая лексема - скобка
         getNextLexeme();
         
-        parseE(); // Первый операнд
+        ExpType argType1 = parseE(); // Первый операнд
         
-        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL && currentLex.index != LEX_DEL_SUB ) ) // Проверяем знак операции
+        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL && currentLex.index != LEX_DEL_SUB && currentLex.index != LEX_DEL_LESS && currentLex.index != LEX_DEL_MORE ) ) // Проверяем знак операции
             throw "& needed";
         
         Lexeme operation = currentLex; // Запоминаем текущую операцию
         
         getNextLexeme();        
         
-        parseE(); // Второй операнд
+        ExpType argType2 = parseE(); // Второй операнд
         
         if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BRCLOSE ) // Проверяем закрывающую скобку
             throw ") needed";
@@ -272,6 +291,14 @@ void parseE() {
         getNextLexeme();
         
         program.push_back( Operation( Operation::BINARY, operation.index ) ); // Добавляем операцию в ПОЛИЗ
+        
+        if ( argType1 != EXP_INT || argType2 != EXP_INT ) // Все операции требуют целочисленных аргументов
+            throw "Int expression required";
+        
+        if ( operation.index == LEX_DEL_LESS || operation.index == LEX_DEL_MORE ) // Если операции сравнения
+            return EXP_BOOL; // То результат - булево значение
+        else
+            return EXP_INT; // Иначе число
     } else { // Иначе ошибка
         throw "Start of expression needed";
     }
@@ -357,6 +384,12 @@ int calculate() {
                         break;
                     case LEX_DEL_SUB:
                         stack.push( v1 - v2 ); // Кладем в стек результат разности
+                        break;
+                    case LEX_DEL_LESS:
+                        stack.push( v1 < v2 ); // Кладем в стек результат разности
+                        break;
+                    case LEX_DEL_MORE:
+                        stack.push( v1 > v2 ); // Кладем в стек результат разности
                         break;
                     default:
                         throw "Unknown binary operation"; // Неизвестная бинарная операция
