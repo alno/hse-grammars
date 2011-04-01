@@ -24,15 +24,6 @@ enum LexConsts {
     LEX_CONST_FALSE // false
 };
  
-/* Теперь необходимо перечислить, а как же эти константы записываются -
-порядок совпадает с описанием перечисления LexConsts */
-const char * LEX_CONSTS[] = {
-    "",
-    "true",
-    "false",
-    0 // Заканчиваем список нулем, чтобы при поиске определять по нему конец
-};
- 
 // Какие бывают разделители:
 enum LexDelims {
     LEX_DEL_NULL, // Для ошибки
@@ -40,17 +31,6 @@ enum LexDelims {
     LEX_DEL_NOT, // Операция "НЕ"
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE // Закрывающая скобка
-};
- 
-/* Перечисляем как записываются разделители - опять же порядок совпадает
-с описанием перечисления LexDelims */
-const char * LEX_DELIMS[] = {
-    "",
-    "&&",
-    "!",
-    "(",
-    ")",
-    0 // Заканчиваем список нулем, чтобы при поиске определять по нему конец
 };
  
 // Описываем класс, представляющий лексему
@@ -72,29 +52,13 @@ public:
       value( value ) {}
  
 };
- 
-/* Функция для поиска строки в списке
-Она принимает первым аргументом строку C, а вторым -
-список строк, и если в этом списке есть такая же строка, как в
-первом аргументе, то возвращает ее индекс, а иначе - 0 */
-int find( const char * buf, const char * list[] ) {
-    int i = 0; // Это текущий индекс
-    while ( list[i] != 0 ) { // Пока не встретили 0 (вспоминаем, в списках последний элемент как раз 0)
-        if ( strcmp( list[i], buf ) == 0 ) // Если строка совпадает с текущим элементов
-            return i; // То возвращаем его индекс
-            
-        i ++; // Ну а иначе, переходим к следующему элементу
-    }
- 
-    return 0; // Ничего не нашли - возвращаем 0
-}
- 
+
 // Вспомогательные структуры объявлены, пора переходить к разбору
  
 char currentChar; // Переменная для текущего символа
  
 void gc() { // Функция чтения следующего символа
-    std::cin >> currentChar;
+    std::cin.get( currentChar );
 }
  
  
@@ -128,7 +92,7 @@ Lexeme readNextLexeme() {
         switch (currentState) { // В зависимости от текущего состояния
             case S: // Если мы в начальном состоянии
                  // Если у нас здесь пробельный символ, то мы его просто пропускаем
-                if ( currentChar == '_' ) {
+                if ( currentChar == ' ' ) {
                     gc(); // То есть считываем следующий
                     currentState = S; // И остаемся в том же состоянии
                 } else if ( isalpha( currentChar ) ) { // Если текущий символ - буква
@@ -139,13 +103,15 @@ Lexeme readNextLexeme() {
                     buf += currentChar; // Добавляем его в строку-буфер
                     gc(); // Считываем следующий символ
                     currentState = D; // И переходим в состояние D
-                } else if ( currentChar == '!' || currentChar == '(' || currentChar == ')' ) { // Если же это односимвольный разделитель
-                    buf += currentChar; // То добавляем его в строку-буфер
-                    gc(); // Считываем следующий символ
-                    
-                    int index = find( buf.c_str(), LEX_DELIMS ); // Находим этот разделитель в таблице
-                        
-                    return Lexeme( LEX_DELIM, index, buf ); // И возвращаем соответствующую лексему
+                } else if ( currentChar == '!' ) { // Отрицание
+                    gc();
+                    return Lexeme( LEX_DELIM, LEX_DEL_NOT, "!" ); 
+                } else if ( currentChar == '(' ) { // Открывающаяся скобка
+                    gc();
+                    return Lexeme( LEX_DELIM, LEX_DEL_BROPEN, "(" );
+                } else if ( currentChar == ')' ) { // Если же закрывающаяся скобка
+                    gc();
+                    return Lexeme( LEX_DELIM, LEX_DEL_BRCLOSE, ")" ); // И возвращаем соответствующую лексему
                 } else if ( currentChar == '$' ) { // Если символ - конец ввода
                     return Lexeme( LEX_EOF, LEX_NULL, "$" ); // То возвращаем лексему конца ввода
                 } else { // Иначе - какой-то непонятный символ
@@ -159,12 +125,12 @@ Lexeme readNextLexeme() {
                     gc(); // Считываем следующий
                     currentState = W; // И остаемся в том же состоянии
                 } else { // Другой символ - значит константа уже закончилась
-                    int index = find( buf.c_str(), LEX_CONSTS ); // Находим ее в таблице
-                    // Здесь мы не считываем следующий символ - потому что текущий символ уже не принадлежит текущей лексеме
-                    if ( index == LEX_CONST_TRUE ) // Если это константа TRUE, то возвращаем лексему с ее значением
-                        return Lexeme( LEX_CONST, LEX_CONST_TRUE, buf, true );
-                    
-                    return Lexeme( LEX_CONST, index, buf ); // Просто возвращаем соответствующую константе лексему
+                    if ( strcmp( buf.c_str(), "true" ) == 0 )
+                        return Lexeme( LEX_CONST, LEX_CONST_TRUE, "true", true );
+                    else if ( strcmp( buf.c_str(), "false" ) == 0 )
+                        return Lexeme( LEX_CONST, LEX_CONST_FALSE, "false", false );
+                    else
+                        return Lexeme( LEX_NULL, LEX_NULL, buf );
                 }
                 break;
             case D: // Состояние распознавания двухсимвольного разделителя
@@ -234,7 +200,7 @@ int main(int argc, char ** argv) {
         std::cout << "Calculated: " << result << std::endl;
     } catch ( const char * err ) {
         std::cout << "Error: " << err << std::endl;
-	std::cout << "Got: {" << currentLex.type // Печатаем ее тип
+        std::cout << "Got: {" << currentLex.type // Печатаем ее тип
                   << "," << currentLex.index // Индекс
                   << "," << currentLex.buf // Строку, из которой она получена
                   << "," << currentLex.value // Булево значение
