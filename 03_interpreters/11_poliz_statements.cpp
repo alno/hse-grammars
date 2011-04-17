@@ -32,8 +32,8 @@ enum LexDelims {
     LEX_DEL_MUL, // Операция "*"
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE, // Закрывающая скобка
-    LEX_DEL_BLOPEN,
-    LEX_DEL_BLCLOSE,
+    LEX_DEL_BLOPEN, // Начало блока
+    LEX_DEL_BLCLOSE, // Конец блока
     LEX_DEL_EQUALS, // Знак равенства
     LEX_DEL_SEMICOLON, // Точка с запятой
     LEX_DEL_LESS, // Меньше
@@ -361,12 +361,12 @@ void parseP() {
         
         parseE(); // Выражение в условии
         
-        program.push_back( Operation( Operation::JMP_FALSE, 0 ) );        
-        int jumpPos = program.size() - 1; // Запоминаем позицию операции
+        program.push_back( Operation( Operation::JMP_FALSE, 0 ) ); // Добавляем в программу операцию условного перехода  
+        int jumpPos = program.size() - 1; // И запоминаем ее позицию
         
-        parseQ(); // THEN-ветвь
+        parseQ(); // Анализируем THEN-ветвь
         
-        program[jumpPos].data = program.size();        
+        program[jumpPos].data = program.size(); // Меняем адрес перехода в операции
     } else {
         throw "Program statement expected";
     }
@@ -466,8 +466,8 @@ int calculate() {
                 int v1 = stack.top(); // Получаем первый аргумент из стека
                 stack.pop(); // И удаляем его из стека
                 
-                if (!v1)
-                    nextOp = op.data;
+                if (!v1) // Если аргумент - 0
+                    nextOp = op.data; // То меняем номер следющей команды
                 break;
             }
             default:

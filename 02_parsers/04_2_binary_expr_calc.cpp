@@ -39,7 +39,7 @@ bool parseE() {
         
         return r1 && r2; // Вычисляем результат операции
     } else {
-        throw "Start of expression needed";
+        throw "Expression required";
     }
 }
 
@@ -47,7 +47,7 @@ bool parseS() {
     bool r = parseE();
     
     if ( c != '$' ) // Проверяем конец цепочки
-        throw "End of line needed";
+        throw "End of line required";
     
     return r;
 }
