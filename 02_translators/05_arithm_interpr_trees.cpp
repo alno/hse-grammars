@@ -3,7 +3,7 @@
 #include <string> // Для std::string
 #include <map> // Для std::map
 #include <vector>
-#include <stack>
+#include <memory> // Для std::auto_ptr
 #include <ctype.h> // Для функции isalpha, определяющей является ли символ буквой
 #include <string.h> // Для функции сравнения строк strcmp
 #include <stdlib.h>
@@ -167,37 +167,97 @@ void getNextLexeme() { // Функция получения следующей �
     currentLex = readNextLexeme();
 }
 
-class Command {
+class Expression {
 public:
-    enum Type {
-        UNKNOWN,
-        ADD,
-        SUB,
-        MUL,
-        CONST,
-        VAR_GET,
-        IFZERO,
-        JUMP
-    };
-
-    int command;
-    int argument;
+    virtual ~Expression() {}
     
-    Command( int command = UNKNOWN, int argument = UNKNOWN ) : 
-        command( command ), 
-        argument( argument ) {}
+    virtual int evaluate( std::vector<int> & vars ) = 0;
 };
 
+class ConstExpression : public Expression {
+public:
+    ConstExpression( int value ) : value( value ) {}
+    virtual ~ConstExpression() {}
+    
+    virtual int evaluate( std::vector<int> & vars ) {
+        return value;
+    }
+    
+private:
+    int value;
+};
+
+class VarExpression : public Expression {
+public:
+    VarExpression( int index ) : index( index ) {}
+    virtual ~VarExpression() {}
+    
+    virtual int evaluate( std::vector<int> & vars ) {
+        return vars[ index ];
+    }
+    
+private:
+    int index;
+};
+
+class BinaryExpression : public Expression {
+public:
+    enum Operation {
+        ADD,
+        SUB,
+        MUL
+    };
+
+    BinaryExpression( int op, std::auto_ptr<Expression> left, std::auto_ptr<Expression> right ) : op( op ), left( left ), right( right ) {}
+    virtual ~BinaryExpression() {}
+    
+    virtual int evaluate( std::vector<int> & vars ) {
+        int l = left->evaluate( vars );
+        int r = right->evaluate( vars );
+        
+        switch ( op ) {
+        case ADD:
+            return l + r;
+        case SUB:
+            return l - r;
+        case MUL:
+            return l * r;
+        default:
+            throw "Unknown operation";
+        }
+    }
+
+private:
+    int op;
+    std::auto_ptr<Expression> left, right;
+};
+
+class CondExpression : public Expression {
+public:
+
+    CondExpression( std::auto_ptr<Expression> cond, std::auto_ptr<Expression> left, std::auto_ptr<Expression> right ) : cond( cond ), left( left ), right( right ) {}
+    virtual ~CondExpression() {}
+    
+    virtual int evaluate( std::vector<int> & vars ) {
+        if ( cond->evaluate( vars ) )
+            return left->evaluate( vars );
+        else
+            return right->evaluate( vars );
+    }
+
+private:
+    std::auto_ptr<Expression> cond, left, right;
+};
 
 std::map<std::string,int> variableIndices; 
-std::vector<Command> program;
 
-void parseET();
+std::auto_ptr<Expression> parseET();
 
-void parseE2() {
+std::auto_ptr<Expression> parseE2() {
     if ( currentLex.type == Lexeme::CONST ) {
-        program.push_back( Command( Command::CONST, currentLex.value ) ); // Добавляем в программу константу
+        int val = currentLex.value;
         getNextLexeme();
+        return std::auto_ptr<Expression>( new ConstExpression( val ) );
     } else if ( currentLex.type == Lexeme::VAR ) {
         int index;
         if ( variableIndices.find( currentLex.buf ) != variableIndices.end() ) {
@@ -206,138 +266,84 @@ void parseE2() {
             index = variableIndices.size();
             variableIndices.insert( std::make_pair( currentLex.buf, index ) );
         }
-            
-        program.push_back( Command( Command::VAR_GET, index ) ); // Добавляем в программу чтение переменной
+        
         getNextLexeme();
+        return std::auto_ptr<Expression>( new VarExpression( index ) );
     } else if ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_BROPEN ) {
         getNextLexeme();
-        parseET();        
+        std::auto_ptr<Expression> e = parseET();        
          
         if ( currentLex.type != Lexeme::DELIM || currentLex.index != Lexeme::DEL_BRCLOSE ) // Проверяем закрывающую скобку
             throw "Closing bracket required";
 
         getNextLexeme();
+        
+        return e;
     } else {
         throw "Expression (E2) required";
     }
 }
 
-void parseE1() {
-    parseE2();
+std::auto_ptr<Expression> parseE1() {
+    std::auto_ptr<Expression> exp = parseE2();
     
     while ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_MUL ) {
         getNextLexeme();
-        parseE2();
         
-        program.push_back( Command::MUL );
+        exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::MUL, exp, parseE1() ) );
     }
+    
+    return exp;
 }
 
-void parseE0() {
-    parseE1();
-    
+std::auto_ptr<Expression> parseE0() {    
+    std::auto_ptr<Expression> exp = parseE1();
+        
     while ( currentLex.type == Lexeme::DELIM && ( currentLex.index == Lexeme::DEL_ADD || currentLex.index == Lexeme::DEL_SUB ) ) {
         if ( currentLex.index == Lexeme::DEL_ADD ) {        
             getNextLexeme();
         
-            parseE1();
-                        
-            program.push_back( Command::ADD );
+            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::ADD, exp, parseE1() ) );
         } else if ( currentLex.index == Lexeme::DEL_SUB ) {
             getNextLexeme();
         
-            parseE1();
-                        
-            program.push_back( Command::SUB );
+            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::SUB, exp, parseE1() ) );
         } else {
             throw "ADD or SUB required";
         }
     }
+    
+    return exp;
 }
 
-void parseET() {
-    parseE0();
+std::auto_ptr<Expression> parseET() {
+    std::auto_ptr<Expression> exp = parseE0();
     
     if ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_QUEST ) {
         getNextLexeme();
-        
-        int condCmd = program.size();
-        program.push_back( Command::IFZERO );
-        
-        parseE0();
-        
-        int jumpCmd = program.size();
-        program.push_back( Command::JUMP );
-        
-        program[ condCmd ].argument = program.size();
+                
+        std::auto_ptr<Expression> left = parseE0();        
         
         if ( currentLex.type != Lexeme::DELIM || currentLex.index != Lexeme::DEL_COLON )
             throw "Colon required";
         
         getNextLexeme();
         
-        parseE0();
+        std::auto_ptr<Expression> right = parseE0();
         
-        program[ jumpCmd ].argument = program.size();
+        exp = std::auto_ptr<Expression>( new CondExpression( exp, left, right ) );
     }
+    
+    return exp;
 }
  
-void parseS() {
-    parseET();
+std::auto_ptr<Expression> parseS() {
+    std::auto_ptr<Expression> exp = parseET();
     
     if ( currentLex.type != Lexeme::EOF ) // Проверяем конец цепочки
         throw "End of line needed";
-}
-
-int calculate(std::vector<int> vars) {
-    std::stack<int> stack;
-    int cur = 0;
     
-    while ( cur < program.size() ) {
-        const Command & cmd = program[ cur ];
-        
-        switch ( cmd.command ) {
-        case Command::ADD: {
-            int a = stack.top(); stack.pop();
-            int b = stack.top(); stack.pop();            
-            stack.push(a+b);
-            break;
-        }
-        case Command::SUB: {
-            int a = stack.top(); stack.pop();
-            int b = stack.top(); stack.pop();            
-            stack.push(b-a);
-            break;
-        }
-        case Command::MUL: {
-            int a = stack.top(); stack.pop();
-            int b = stack.top(); stack.pop();            
-            stack.push(a*b);
-            break;
-        }
-        case Command::CONST:
-            stack.push(cmd.argument);
-            break;
-        case Command::VAR_GET:
-            stack.push(vars[cmd.argument]);
-            break;
-        case Command::IFZERO: {
-            int a = stack.top(); stack.pop();
-
-            if ( a == 0 )
-                cur = cmd.argument - 1;
-
-            break;
-        }
-        case Command::JUMP:
-            cur = cmd.argument - 1;
-            break;
-        }
-        
-        ++ cur;
-    }
-    
-    return stack.top();
+    return exp;
 }
 
 std::vector<int> readVariables() {
@@ -373,9 +379,10 @@ int main(int argc, char ** argv) {
     try {
         gc(); // Считываем первый символ
         getNextLexeme(); // Считываем первую лексему
-        parseS(); // Парсим и вычисляем выражение
-        
-        std::cout << "Calculated: " << calculate(readVariables()) << std::endl;
+        std::auto_ptr<Expression> exp = parseS(); // Парсим и вычисляем выражение
+        std::vector<int> vars = readVariables();
+                
+        std::cout << "Calculated: " << exp->evaluate(vars) << std::endl;
     } catch ( const char * err ) {
         std::cout << "Error: " << err << std::endl;
         std::cout << "Got: {" << currentLex.type // Печатаем ее тип
