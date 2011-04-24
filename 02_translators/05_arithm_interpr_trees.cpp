@@ -37,7 +37,7 @@ public:
         CONST, // Константы, состоящие из цифр
         VAR, // Переменные, начинающиеся с буквы
         DELIM, // Разделители, состояще из неалфавитных символов
-        EOF // Конец ввода
+        LEOF // Конец ввода
     };
  
     // Какие бывают разделители:
@@ -133,7 +133,7 @@ Lexeme readNextLexeme() {
                     gc();
                     return Lexeme( Lexeme::DELIM, Lexeme::DEL_COLON, ":" );
                 } else if ( currentChar == '$' ) { // Если символ - конец ввода
-                    return Lexeme( Lexeme::EOF, Lexeme::UNKNOWN, "$" ); // То возвращаем лексему конца ввода
+                    return Lexeme( Lexeme::LEOF, Lexeme::UNKNOWN, "$" ); // То возвращаем лексему конца ввода
                 } else { // Иначе - какой-то непонятный символ
                     buf += currentChar; // Добавляем его в строку-буфер
                     return Lexeme( Lexeme::UNKNOWN, Lexeme::UNKNOWN, buf ); // И возвращаем ошибочную лексему
@@ -340,7 +340,7 @@ std::auto_ptr<Expression> parseET() {
 std::auto_ptr<Expression> parseS() {
     std::auto_ptr<Expression> exp = parseET();
     
-    if ( currentLex.type != Lexeme::EOF ) // Проверяем конец цепочки
+    if ( currentLex.type != Lexeme::LEOF ) // Проверяем конец цепочки
         throw "End of line needed";
     
     return exp;
