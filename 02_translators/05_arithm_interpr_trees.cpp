@@ -20,6 +20,9 @@
   E0 -> E1 { (+|-) E1 }
   E1 -> E2 { * E2 }
   E2 -> '(' E0 ')' | number | var
+  
+  Для вычисления выражений в программе используется внутреннее представление
+  в виде дерева выражений.
 */
  
 /* Сначала необходимо построить лексический анализатор, который разбивает входной
@@ -167,6 +170,10 @@ void getNextLexeme() { // Функция получения следующей �
     currentLex = readNextLexeme();
 }
 
+/* Базовый класс выражения.
+ * Содержит виртуальный деструктор и виртуальный метод вычисления
+ * значения выражения при заданных значениях переменных.
+ */
 class Expression {
 public:
     virtual ~Expression() {}
@@ -174,6 +181,7 @@ public:
     virtual int evaluate( std::vector<int> & vars ) = 0;
 };
 
+// Константное выражение - возвращает заданное значение
 class ConstExpression : public Expression {
 public:
     ConstExpression( int value ) : value( value ) {}
@@ -187,6 +195,7 @@ private:
     int value;
 };
 
+// Выражение-переменная - возвращает значение заданной переменной
 class VarExpression : public Expression {
 public:
     VarExpression( int index ) : index( index ) {}
@@ -200,6 +209,9 @@ private:
     int index;
 };
 
+/* Бинарная операция - возвращает результат применения заданной
+ * операции к аргументам.
+ */
 class BinaryExpression : public Expression {
 public:
     enum Operation {
@@ -232,6 +244,9 @@ private:
     std::auto_ptr<Expression> left, right;
 };
 
+/* Условное выражение - вычисляет второй или третий операнд в зависимости 
+ * от значения первого операнда
+ */
 class CondExpression : public Expression {
 public:
 
@@ -251,24 +266,29 @@ private:
 
 std::map<std::string,int> variableIndices; 
 
+/*
+ * Теперь каждая функция разбора нетерминала возвращает выражение во внутреннем представлении.
+ * При передаче результата и хранении выражений используется std::auto_ptr, который автоматически освобождает память.
+ */
+
 std::auto_ptr<Expression> parseET();
 
 std::auto_ptr<Expression> parseE2() {
     if ( currentLex.type == Lexeme::CONST ) {
         int val = currentLex.value;
         getNextLexeme();
-        return std::auto_ptr<Expression>( new ConstExpression( val ) );
+        return std::auto_ptr<Expression>( new ConstExpression( val ) ); // Возвращаем константное выражение
     } else if ( currentLex.type == Lexeme::VAR ) {
-        int index;
-        if ( variableIndices.find( currentLex.buf ) != variableIndices.end() ) {
-            index = variableIndices.find( currentLex.buf )->second;
+        int index; // Индекс переменной
+        if ( variableIndices.find( currentLex.buf ) != variableIndices.end() ) { // Если переменная уже известна
+            index = variableIndices.find( currentLex.buf )->second; // Берем индекс из ассоциативного массива
         } else {
-            index = variableIndices.size();
-            variableIndices.insert( std::make_pair( currentLex.buf, index ) );
+            index = variableIndices.size(); // Генерируем новый индекс
+            variableIndices.insert( std::make_pair( currentLex.buf, index ) ); // Добавляем его в ассоциативный массив
         }
         
         getNextLexeme();
-        return std::auto_ptr<Expression>( new VarExpression( index ) );
+        return std::auto_ptr<Expression>( new VarExpression( index ) ); // Возвращаем выражение-переменную
     } else if ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_BROPEN ) {
         getNextLexeme();
         std::auto_ptr<Expression> e = parseET();        
@@ -290,7 +310,7 @@ std::auto_ptr<Expression> parseE1() {
     while ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_MUL ) {
         getNextLexeme();
         
-        exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::MUL, exp, parseE1() ) );
+        exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::MUL, exp, parseE1() ) ); // Формируем новое ьинарное выражение
     }
     
     return exp;
@@ -303,11 +323,11 @@ std::auto_ptr<Expression> parseE0() {
         if ( currentLex.index == Lexeme::DEL_ADD ) {        
             getNextLexeme();
         
-            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::ADD, exp, parseE1() ) );
+            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::ADD, exp, parseE1() ) ); // Формируем новое ьинарное выражение
         } else if ( currentLex.index == Lexeme::DEL_SUB ) {
             getNextLexeme();
         
-            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::SUB, exp, parseE1() ) );
+            exp = std::auto_ptr<Expression>( new BinaryExpression( BinaryExpression::SUB, exp, parseE1() ) ); // Формируем новое ьинарное выражение
         } else {
             throw "ADD or SUB required";
         }
@@ -322,16 +342,16 @@ std::auto_ptr<Expression> parseET() {
     if ( currentLex.type == Lexeme::DELIM && currentLex.index == Lexeme::DEL_QUEST ) {
         getNextLexeme();
                 
-        std::auto_ptr<Expression> left = parseE0();        
+        std::auto_ptr<Expression> left = parseE0(); // Разбираем THEN-операнд
         
         if ( currentLex.type != Lexeme::DELIM || currentLex.index != Lexeme::DEL_COLON )
             throw "Colon required";
         
         getNextLexeme();
         
-        std::auto_ptr<Expression> right = parseE0();
+        std::auto_ptr<Expression> right = parseE0(); // Разбираем ELSE-операнд
         
-        exp = std::auto_ptr<Expression>( new CondExpression( exp, left, right ) );
+        exp = std::auto_ptr<Expression>( new CondExpression( exp, left, right ) ); // Формируем новое условное выражение
     }
     
     return exp;
