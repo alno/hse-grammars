@@ -2,47 +2,68 @@
 #include <memory> // std::auto_ptr
 #include <utility> // std::pair
 #include <string> // std::string
+#include <vector> // std::vector
 
 //-------------------------------------------------------
 
-// Результат разбора
+// Данные результата разбора
 // Имеет параметр T - тип значения
 template<typename T>
-class ParseResult {
+class ParseResultData {
 public:
   // Метод, возвращающий успешность разбора
   virtual bool success() const = 0;
 
   // Метод, возвращающий значение разбора. В случае неуспешного разбора порождается исключение
-  virtual const T & result() const = 0;
+  virtual const T & value() const = 0;
   // Метод, возвращающий остаток неразобранной строки. В случае неуспешного разбора порождается исключение
   virtual const char * tail() const = 0;
 };
 
 // Неуспешный результат разбора
 template<typename T>
-class FailResult : public ParseResult<T> {
+class FailResultData : public ParseResultData<T> {
 public:
   virtual bool success() const { return false; }
 
-  virtual const T & result() const { throw "Fail doesn't contain result"; }
+  virtual const T & value() const { throw "Fail doesn't contain value"; }
   virtual const char * tail() const { throw "Fail doesn't contain tail"; }
 };
 
 // Успешный результат разбора
 template<typename T>
-class SuccessParseResult : public ParseResult<T> {
+class SuccessResultData : public ParseResultData<T> {
 public:
-  SuccessParseResult( T result, const char * tail ) : _result( result ), _tail( tail ) {}
+  SuccessResultData( T value, const char * tail ) : _value( value ), _tail( tail ) {}
 
   virtual bool success() const { return true; }
 
-  virtual const T & result() const { return _result; }
+  virtual const T & value() const { return _value; }
   virtual const char * tail() const { return _tail; }
 
 private:
-  T _result;
+  T _value;
   const char * _tail;
+};
+
+// Результат разбора
+template<typename T>
+class ParseResult {
+public:
+  ParseResult() : data(new FailResultData<T>()) {}
+  ParseResult( T value, const char * tail ) : data(new SuccessResultData<T>(value,tail)) {}
+  ParseResult( const ParseResult & res) : data( res.data ) {}
+
+  // Метод, возвращающий успешность разбора
+  bool success() const { return data->success(); };
+
+  // Метод, возвращающий значение разбора. В случае неуспешного разбора порождается исключение
+  const T & value() const { return data->value(); };
+  // Метод, возвращающий остаток неразобранной строки. В случае неуспешного разбора порождается исключение
+  const char * tail() const { return data->tail(); };
+  
+private:
+  mutable std::auto_ptr<ParseResultData<T> > data;
 };
 
 // Парсер
@@ -51,11 +72,10 @@ template<typename T>
 class Parser {
 public:
   virtual ~Parser() {}
-  virtual std::auto_ptr<ParseResult<T> > parse( const char * start, const char * end ) = 0;
+  virtual ParseResult<T> parse( const char * start, const char * end ) = 0;
 
 protected:
-  std::auto_ptr<ParseResult<T> > success( T result, const char * tail ) { return std::auto_ptr<ParseResult<T> >( new SuccessParseResult<T>( result, tail ) ); }
-  std::auto_ptr<ParseResult<T> > fail() { return std::auto_ptr<ParseResult<T> >( new FailResult<T>() ); }
+  ParseResult<T> success( T value, const char * tail ) { return ParseResult<T>( value, tail ); }
 };
 
 // Парсер строки
@@ -64,14 +84,14 @@ class StrParser : public Parser<std::string> {
 public:
   StrParser( const std::string & str ) : str(str) {}
 
-  std::auto_ptr<ParseResult<std::string> > parse( const char * start, const char * end ) {
+  ParseResult<std::string> parse( const char * start, const char * end ) {
     if ( end - start < str.size() )
-      return fail();
+      return ParseResult<std::string>();
 
     if ( std::string( start, str.size() ) == str )
       return success( str, start + str.size() );
 
-    return fail();
+    return ParseResult<std::string>();
   }
 private:
   std::string str;
@@ -85,17 +105,17 @@ class SeqParser : public Parser<std::pair<T1,T2> > {
 public:
   SeqParser( std::auto_ptr<Parser<T1> > first, std::auto_ptr<Parser<T2> > second ) : first( first ), second( second ) {}
 
-  std::auto_ptr<ParseResult<std::pair<T1,T2> > > parse( const char * start, const char * end ) {
-    std::auto_ptr<ParseResult<T1> > result1 = first->parse( start, end );
+  ParseResult<std::pair<T1,T2> > parse( const char * start, const char * end ) {
+    ParseResult<T1> result1 = first->parse( start, end );
 
-    if ( result1->success() ) {
-      std::auto_ptr<ParseResult<T2> > result2 = second->parse( result1->tail(), end );
+    if ( result1.success() ) {
+      ParseResult<T2> result2 = second->parse( result1.tail(), end );
 
-      if ( result2->success() )
-        return success( std::make_pair( result1->result(), result2->result() ), result2->tail() );
+      if ( result2.success() )
+        return success( std::make_pair( result1.value(), result2.value() ), result2.tail() );
     }
 
-    return std::auto_ptr<ParseResult<std::pair<T1,T2> > >( new FailResult<std::pair<T1,T2> >() );
+    return ParseResult<std::pair<T1,T2> >();
   }
 private:
   std::auto_ptr<Parser<T1> > first;
@@ -109,16 +129,34 @@ class AltParser : public Parser<T> {
 public:
   AltParser( std::auto_ptr<Parser<T> > first, std::auto_ptr<Parser<T> > second ) : first( first ), second( second ) {}
 
-  std::auto_ptr<ParseResult<T> > parse( const char * start, const char * end ) {
-    std::auto_ptr<ParseResult<T> > firstResult = first->parse( start, end );
+  ParseResult<T> parse( const char * start, const char * end ) {
+    ParseResult<T> firstResult = first->parse( start, end );
 
-    if (firstResult->success())
+    if (firstResult.success())
       return firstResult;
 
     return second->parse( start, end );
   }
 private:
   std::auto_ptr<Parser<T> > first, second;
+};
+
+// Опциональный парсер
+template<typename T>
+class OptParser : public Parser<std::vector<T> > {
+public:
+  OptParser( std::auto_ptr<Parser<T> > parser ) : parser( parser ) {}
+
+  ParseResult<std::vector<T> > parse( const char * start, const char * end ) {
+    ParseResult<T> firstResult = parser->parse( start, end );
+
+    if (firstResult.success())
+      return success( std::vector<T>( 1, firstResult.value() ), firstResult.tail() );
+
+    return success( std::vector<T>(), start );
+  }
+private:
+  std::auto_ptr<Parser<T> > parser;
 };
 
 // Парсер преобразования
@@ -130,13 +168,13 @@ public:
 
   TransformParser( std::auto_ptr<Parser<T2> > parser, Func f ): parser(parser), func(f) {}
 
-  std::auto_ptr<ParseResult<T1> > parse( const char * start, const char * end ) {
-    std::auto_ptr<ParseResult<T2> > result = parser->parse( start, end ); // Получаем результат разбора
+  ParseResult<T1> parse( const char * start, const char * end ) {
+    ParseResult<T2> result = parser->parse( start, end ); // Получаем результат разбора
 
-    if (result->success()) // Если он успешен
-      return success(func(result->result()),result->tail()); // Возвращаем успешный результат, преобразовав значение в нем
+    if (result.success()) // Если он успешен
+      return success(func(result.value()),result.tail()); // Возвращаем успешный результат, преобразовав значение в нем
 
-    return std::auto_ptr<ParseResult<T1> >( new FailResult<T1>() ); // Иначе возвращаем неуспех
+    return ParseResult<T1>(); // Иначе возвращаем неуспех
   }
 private:
   std::auto_ptr<Parser<T2> > parser;
@@ -172,6 +210,9 @@ public:
     return new AltParser<T>( parser, h.parser );
   }
 
+  ParserHolder<std::vector<T> > opt() {
+    return new OptParser<T>( parser );
+  }
 
   mutable std::auto_ptr<Parser<T> > parser;
 };
@@ -181,6 +222,12 @@ inline ParserHolder<std::string> str( const std::string & s ) {
   return new StrParser( s );
 }
 
+
+inline ParserHolder<std::string> operator & (const std::string & s) {
+  return new StrParser( s );
+}
+
+
 // Правило разбора
 // Параметризовано типом значения разбора
 template<typename T>
@@ -189,7 +236,7 @@ public:
   Rule() {} // Конструктор по умолчанию
   Rule(const ParserHolder<T> & p): parser(p.parser) {} // Конструктор для привзывания выражения
 
-  std::auto_ptr<ParseResult<T> > parse( const char * start, const char * end ) {
+  ParseResult<T> parse( const char * start, const char * end ) {
     if ( parser.get() )
       return parser->parse( start, end );
 
@@ -213,7 +260,7 @@ class RuleParser : public Parser<T> {
 public:
   RuleParser( Rule<T> & rule ) : rule( rule ) {}
 
-  std::auto_ptr<ParseResult<T> > parse( const char * start, const char * end ) { return rule.parse( start, end ); }
+  ParseResult<T> parse( const char * start, const char * end ) { return rule.parse( start, end ); }
 private:
   Rule<T> & rule;
 };
@@ -222,10 +269,9 @@ template<typename T>
 ParserHolder<T> Rule<T>::operator &() {
   return new RuleParser<T>( *this );
 }
-
 //---------------------------------------------------------------------------------------------------------
 
-int zero(std::string s) {
+int zero(std::vector<std::string> s) {
   return 0;
 }
 
@@ -236,10 +282,16 @@ int inc(std::pair<std::pair<std::string,int>,std::string> p) {
 int main() {
 
   Rule<int> a;
-  a = str("a") >> zero || str("b") >> &a >> str("c") >> inc;
+  a = str("b") >> &a >> str("c") >> inc || str("a").opt() >> zero;
 
   std::string str;
 
   std::cin >> str;
-  std::cout << a.parse(str.c_str(),str.c_str() + str.size())->result() << std::endl;
+  ParseResult<int> r = a.parse(str.c_str(),str.c_str() + str.size());
+  
+  if ( r.success() && r.tail() == str.c_str() + str.size() ) {
+    std::cout << r.value() << std::endl;
+  } else {
+    std::cout << "Fail" << std::endl;
+  }
 }
