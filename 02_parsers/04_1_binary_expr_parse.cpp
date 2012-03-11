@@ -7,28 +7,28 @@ typedef char Lexeme; // Тип для лексемы
 
 Lexeme currentLex; // Текущая лексема
 
-void getNextLexeme() { // Функция получения следующей лексемы 
+void getNextLexeme() { // Функция получения следующей лексемы
     std::cin >> currentLex;
 }
 
 void parseE() {
     if ( currentLex == '1' || currentLex == '0' ) {
-        getNextLexeme();     
+        getNextLexeme();
     } else if ( currentLex == '!' ) {
         getNextLexeme();
-        
+
         parseE(); // Операнд
     } else if ( currentLex == '(' ) {
         getNextLexeme();
-        
+
         parseE(); // Первый операнд
-        
+
         if ( currentLex != '&' ) // Проверяем знак операции
             throw "& needed";
         getNextLexeme();
-        
+
         parseE(); // Второй операнд
-        
+
         if ( currentLex != ')' ) // Проверяем закрывающую скобку
             throw ") needed";
         getNextLexeme();

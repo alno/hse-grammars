@@ -7,35 +7,35 @@ typedef char Lexeme; // Тип для лексемы
 
 Lexeme currentLex; // Текущая лексема
 
-void getNextLexeme() { // Функция получения следующей лексемы 
+void getNextLexeme() { // Функция получения следующей лексемы
     std::cin >> currentLex;
 }
 
 bool parseE() {
     if ( currentLex == '1' || currentLex == '0' ) {
         bool r = currentLex == '1'; // Определяем значение терминального выражения
-        getNextLexeme();     
-        
+        getNextLexeme();
+
         return r;
     } else if ( currentLex == '!' ) {
         getNextLexeme();
-        
+
         return !parseE(); // Операнд
     } else if ( currentLex == '(' ) {
         getNextLexeme();
-        
+
         bool r1 = parseE(); // Первый операнд
-        
+
         if ( currentLex != '&' ) // Проверяем знак операции
             throw "& needed";
         getNextLexeme();
-        
+
         bool r2 = parseE(); // Второй операнд
-        
+
         if ( currentLex != ')' ) // Проверяем закрывающую скобку
             throw ") needed";
         getNextLexeme();
-        
+
         return r1 && r2;
     } else {
         throw "Start of expression needed";
@@ -44,10 +44,10 @@ bool parseE() {
 
 bool parseS() {
     bool r = parseE();
-    
+
     if ( currentLex != '$' ) // Проверяем конец цепочки
         throw "End of line needed";
-    
+
     return r;
 }
 

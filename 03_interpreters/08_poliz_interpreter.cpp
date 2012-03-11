@@ -7,7 +7,7 @@
 #include <string> // Для std::string
 #include <vector> // Для std::vector
 #include <stack> // Для std::stack
- 
+
 /* Итак, необходимо построить лексический анализатор, который разбивает входной
 поток на лексемы и классифицирует их.
 В нашей грамматике можно выделить два основных типа лексем - числовые константы
@@ -29,7 +29,7 @@ enum LexDelims {
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE // Закрывающая скобка
 };
- 
+
 /* Перечисляем как записываются разделители - опять же порядок совпадает
 с описанием перечисления LexDelims */
 const char * LEX_DELIMS[] = {
@@ -40,27 +40,27 @@ const char * LEX_DELIMS[] = {
     ")",
     0 // Заканчиваем список нулем, чтобы при поиске определять по нему конец
 };
- 
+
 // Описываем класс, представляющий лексему
 class Lexeme {
 public:
     // У него 4 поля:
     int type; // Тип лексемы (константа, разделитель, ошибка, конец)
     int index; // Конкретный индекс лексемы (по соответсвующим таблицам для типов)
-    
+
     std::string buf; // Строка, из которой была получена лексема - для выдачи диагностических сообщений
-    
+
     int value; // Значение лексемы - используется для числовых констант
-    
+
     // Здесь объявляем конструктор лексемы
     Lexeme( int type = LEX_NULL, int index = LEX_NULL, const std::string & buf = "", int value = 0 ) :
       type( type ), // Инициализируем поле type значением одноименного параметра
       index( index ), // Аналогично для index и остальных полей
       buf( buf ),
       value( value ) {}
- 
+
 };
- 
+
 /* Функция для поиска строки в списке
 Она принимает первым аргументом строку C, а вторым -
 список строк, и если в этом списке есть такая же строка, как в
@@ -70,23 +70,23 @@ int find( const char * buf, const char * list[] ) {
     while ( list[i] != 0 ) { // Пока не встретили 0 (вспоминаем, в списках последний элемент как раз 0)
         if ( strcmp( list[i], buf ) == 0 ) // Если строка совпадает с текущим элементов
             return i; // То возвращаем его индекс
-            
+
         i ++; // Ну а иначе, переходим к следующему элементу
     }
- 
+
     return 0; // Ничего не нашли - возвращаем 0
 }
- 
+
 // Вспомогательные структуры объявлены, пора переходить к разбору
- 
+
 char currentChar; // Переменная для текущего символа
- 
+
 void gc() { // Функция чтения следующего символа
     std::cin >> currentChar;
 }
- 
- 
-/* Теперь сама функция для лексического анализа, выделяющая из входного 
+
+
+/* Теперь сама функция для лексического анализа, выделяющая из входного
 потока символов очередную лексему. Она предполагает, что при ее вызове
 текущий символ - первый символ лексемы, после ее завершения текущий
 символ - следующий за лексемой.
@@ -94,7 +94,7 @@ void gc() { // Функция чтения следующего символа
 
 А это регулярная грамматика, на основе которой производится разбор, здесь
 \d обозначает цифру, а \s пробельный символ (по аналогии с регулярными выражениями):
- 
+
 S -> \d N | + | * | ) | ( | $ | \s S
 N -> \d N |
 
@@ -105,11 +105,11 @@ N выделяет числовые константы
 */
 Lexeme readNextLexeme() {
     enum State { S, N }; // Итак, у нас есть три состояния - дополнительных здесь объявлять не будем
-    
+
     State currentState = S; // Переменная для состояния, начальное состояние - S
-    
+
     std::string buf; // Это строка-буфер, в котором будут накапливаться символы, образующие лексему
-    
+
     while (true) { // Цикл обработки
         switch (currentState) { // В зависимости от текущего состояния
             case S: // Если мы в начальном состоянии
@@ -124,9 +124,9 @@ Lexeme readNextLexeme() {
                 } else if ( currentChar == '+' || currentChar == '*' || currentChar == '(' || currentChar == ')' ) { // Если же это односимвольный разделитель
                     buf += currentChar; // То добавляем его в строку-буфер
                     gc(); // Считываем следующий символ
-                    
+
                     int index = find( buf.c_str(), LEX_DELIMS ); // Находим этот разделитель в таблице
-                        
+
                     return Lexeme( LEX_DELIM, index, buf ); // И возвращаем соответствующую лексему
                 } else if ( currentChar == '$' ) { // Если символ - конец ввода
                     return Lexeme( LEX_EOF, LEX_NULL, "$" ); // То возвращаем лексему конца ввода
@@ -140,7 +140,7 @@ Lexeme readNextLexeme() {
                     buf += currentChar; // То добавляем его в строку-буфер
                     gc(); // Считываем следующий
                     currentState = N; // И остаемся в том же состоянии
-                } else { // Другой символ - значит число уже закончилось                    
+                } else { // Другой символ - значит число уже закончилось
                     return Lexeme( LEX_NUMBER, LEX_NULL, buf, atoi( buf.c_str() ) ); // Просто возвращаем соответствующую константе лексему
                 }
                 break;
@@ -149,7 +149,7 @@ Lexeme readNextLexeme() {
 }
 
 /* Это класс, представляющий операцию в ПОЛИЗ. Он содержит тип операции и дополнительные данные,
-которые интерпретируются в зависимости от типа операции (например, для констант - значение, для 
+которые интерпретируются в зависимости от типа операции (например, для констант - значение, для
 бинарных операций - индекс действия)
 */
 class Operation {
@@ -158,9 +158,9 @@ public:
         CONST, // Операция загрузки константы в стек
         BINARY // Бинарная операция
     };
-    
+
     Operation( int type, int data ) : type( type ), data( data ) {}
-    
+
     int type; // Тип
     int data; // Дополнительные данные
 };
@@ -178,27 +178,27 @@ std::vector<Operation> program; // Программа - как список оп
 void parseE() {
     if ( currentLex.type == LEX_NUMBER ) { // Если текущая лексема - число
         program.push_back( Operation( Operation::CONST, currentLex.value ) ); // Добавляем константу в код программы
-        
+
         getNextLexeme();
     } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_BROPEN ) { // Если текущая лексема - скобка
         getNextLexeme();
-        
+
         parseE(); // Первый операнд
-        
+
         if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL ) ) // Проверяем знак операции
             throw "& needed";
-        
+
         Lexeme operation = currentLex; // Запоминаем текущую операцию
-        
-        getNextLexeme();        
-        
+
+        getNextLexeme();
+
         parseE(); // Второй операнд
-        
+
         if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BRCLOSE ) // Проверяем закрывающую скобку
             throw ") needed";
-        
+
         getNextLexeme();
-        
+
         program.push_back( Operation( Operation::BINARY, operation.index ) ); // Добавляем операцию в ПОЛИЗ
     } else { // Иначе ошибка
         throw "Start of expression needed";
@@ -215,10 +215,10 @@ void parseS() {
 /* Вычислить значение выражения */
 int calculate() {
     std::stack<int> stack; // Стек значений, используемых при вычислении
-    
+
     for ( int i = 0; i < program.size(); ++ i ) { // Для каждой операции
         Operation op = program[i];
-        
+
         switch ( op.type ) { // В зависимости от типа
             case Operation::CONST: // Для константы
                 stack.push( op.data ); // Кладем в стек значение
@@ -227,10 +227,10 @@ int calculate() {
             {
                 int v2 = stack.top(); // Получаем второй аргумент из стека
                 stack.pop(); // И удаляем его из стека
-                
-                int v1 = stack.top(); // Получаем первый аргумент из стека                
+
+                int v1 = stack.top(); // Получаем первый аргумент из стека
                 stack.pop(); // И удаляем его из стека
-                
+
                 switch ( op.data ) { // В зависимости от конкретной операции
                     case LEX_DEL_ADD:
                         stack.push( v1 + v2 ); // Кладем в стек результат сложения
@@ -247,10 +247,10 @@ int calculate() {
                 throw "Unknown operation type"; // Неизвестный тип операции
         }
     }
-    
+
     return stack.top(); // Возвращаем верхнее значение в стеке
 }
- 
+
 int main(int argc, char ** argv) {
     try {
         std::cout << "Enter expression: " << std::endl;
@@ -258,30 +258,30 @@ int main(int argc, char ** argv) {
         getNextLexeme(); // Считываем первую лексему
         parseS(); // Парсим выражение
     } catch ( const char * err ) {
-        std::cout << "Error parsing: " << err << ", but " 
+        std::cout << "Error parsing: " << err << ", but "
              << "{" << currentLex.type // Печатаем ее тип
              << "," << currentLex.index // Индекс
              << "," << currentLex.buf // Строку, в которой она накоплена
              << "," << currentLex.value // Булево значение
              << "} got." << std::endl;
-        
+
         return 1;
     }
-    
+
     std::cout << "Expression parsed, calculating..." << std::endl;
-    
+
     // Здесь печатается сгенерированный ПОЛИЗ
     //for ( int i = 0; i < program.size(); ++ i ) {
     //    Operation op = program[i];
     //    std::cout << "{" << op.type << "," << op.value << "}" << std::endl;
     //}
-    
+
     try {
         std::cout << "Result: " << calculate() << std::endl; // Вычисляем выражение
     } catch ( const char * err ) {
         std::cout << "Error calculating: " << err << std::endl;
         return 2;
     }
-    
+
     return 0;
 }
