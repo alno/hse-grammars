@@ -1,22 +1,36 @@
+/*
+ * В этой программе демонстрируется использование библиотеки регулряных выражений PCRE (http://www.pcre.org/) для сопоставления строк с регулярными выражениями
+ *
+ * В качестве примера рассматривается десятичное число со знаком из которого выделяются собственно знак и модуль числа
+ *
+ * Версия для Windows: http://www.psyon.org/projects/pcre-win32/pcre-7.9-static.zip
+ */
+
 //#include "stdafx.h" // Подключаем прекомлируемый заголовочный файл, если он есть в проекте
-#include <boost/xpressive/xpressive.hpp> // Подключаем заголовочный файл для регулярных выражений
+#include <pcreposix.h> // Собственно сама библиотека с POSIX-интерфейсом
 
 #include <string>
 #include <iostream>
 
-using namespace boost::xpressive; // Включаем пространство имен
-
-bool check( const std::string & s ) {
-    static const sregex e = sregex::compile( "[+-]?[01]+" ); // Создаем регулярное выражение
-
-    return regex_match( s, e ); // Проверяем строку на соответствие
-}
-
 int main( int argc, char ** argv ) {
-    std::string s;
+    std::string s; // Объявляем строку которую будем проверять
+    std::cin >> s; // И считываем со стандартного ввода
 
-    std::cin >> s;
-    std::cout << check( s ) << std::endl;
+    regex_t e; // Структура, представляющая регулярное выражение во внутреннем представлении
+    regcomp(&e, "^([+-]?)([0-9]+)$", 0); // Сначала регулярное выражение надо скомпилировать из строки. 0 - это дополнительные флаги (в данном случае - пустое сножество)
+
+    regmatch_t match[3]; // Массив для элементов сопоставлений
+
+    if (regexec(&e, s.c_str(), 3, match, 0) == 0) { // Вызываем функцию сопоставления и проверяем его успешность (0 если успешно)
+        std::cout << "yes" << std::endl;
+        std::cout << std::string(s, match[0].rm_so, match[0].rm_eo - match[0].rm_so) << std::endl; // Полная сопоставленная строка - элемент сопоставления 0
+        std::cout << std::string(s, match[1].rm_so, match[1].rm_eo - match[1].rm_so) << std::endl; // Первая группа сопоставления - знак числа
+        std::cout << std::string(s, match[1].rm_so, match[1].rm_eo - match[1].rm_so) << std::endl; // Вторая группа сопоставления - модуль числа
+    } else {
+        std::cout << "no" << std::endl; // Не сопоставилось
+    }
+
+    regfree(&e); // В конце освобождаем память, занятую регулярным выражением во внутреннем представлении
 
     return 0;
 }
