@@ -7,6 +7,8 @@
  */
 
 //#include "stdafx.h" // Подключаем прекомлируемый заголовочный файл, если он есть в проекте
+
+#define PCRE_STATIC
 #include <pcreposix.h> // Собственно сама библиотека с POSIX-интерфейсом
 
 #include <string>
@@ -25,7 +27,7 @@ int main( int argc, char ** argv ) {
         std::cout << "yes" << std::endl;
         std::cout << std::string(s, match[0].rm_so, match[0].rm_eo - match[0].rm_so) << std::endl; // Полная сопоставленная строка - элемент сопоставления 0
         std::cout << std::string(s, match[1].rm_so, match[1].rm_eo - match[1].rm_so) << std::endl; // Первая группа сопоставления - знак числа
-        std::cout << std::string(s, match[1].rm_so, match[1].rm_eo - match[1].rm_so) << std::endl; // Вторая группа сопоставления - модуль числа
+        std::cout << std::string(s, match[2].rm_so, match[2].rm_eo - match[2].rm_so) << std::endl; // Вторая группа сопоставления - модуль числа
     } else {
         std::cout << "no" << std::endl; // Не сопоставилось
     }
