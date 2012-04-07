@@ -9,6 +9,7 @@
 //#include "stdafx.h" // Подключаем прекомлируемый заголовочный файл, если он есть в проекте
 
 #define PCRE_STATIC
+
 #include <pcreposix.h> // Собственно сама библиотека с POSIX-интерфейсом
 
 #include <string>
