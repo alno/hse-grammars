@@ -92,7 +92,7 @@ std::ostream & operator <<(std::ostream & out, const Lexeme & lex) {
 список строк, и если в этом списке есть такая же строка, как в
 первом аргументе, то возвращает ее индекс, а иначе - 0 */
 int find( const std::string & buf, const std::string * list ) {
-    for ( int i = 0; !list[i].empty(); ++ i ) // Пока не встретили пустую строку
+    for ( int i = 1; !list[i].empty(); ++ i ) // Пока не встретили пустую строку
         if ( list[i] == buf ) // Если строка совпадает с текущим элементов
             return i; // То возвращаем его индекс
 
@@ -138,7 +138,7 @@ Lexeme readNextLexeme() {
         switch (currentState) { // В зависимости от текущего состояния
             case S: // Если мы в начальном состоянии
                  // Если у нас здесь пробельный символ, то мы его просто пропускаем
-                if ( isspace( currentChar ) ) {
+                if ( currentChar == ' ' ) {
                     gc(); // То есть считываем следующий
                     currentState = S; // И остаемся в том же состоянии
                 } else if ( isalpha( currentChar ) ) { // Если текущий символ - буква
