@@ -185,33 +185,36 @@ void getNextLexeme() {
 std::vector<Operation> program; // Программа - как список операций ПОЛИЗ
 
 /* Разбор выражения */
+
+void parseG() {
+   if ( currentLex.type == LEX_NUMBER ) {
+       program.push_back( Operation( Operation::CONST, currentLex.value ) ); // Добавляем константу в код программы
+
+        getNextLexeme();
+   } else {
+       throw "Number required";
+   }
+}
+
+void parseF() {
+    parseG();
+
+    while ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_MUL ) {
+        getNextLexeme();
+        parseG();
+
+        program.push_back( Operation( Operation::BINARY, LEX_DEL_MUL ) ); // Добавляем операцию в ПОЛИЗ
+    }
+}
+
 void parseE() {
-    if ( currentLex.type == LEX_NUMBER ) { // Если текущая лексема - число
-        program.push_back( Operation( Operation::CONST, currentLex.value ) ); // Добавляем константу в код программы
+    parseF();
 
+    while ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_ADD ) {
         getNextLexeme();
-    } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_BROPEN ) { // Если текущая лексема - скобка
-        getNextLexeme();
+        parseF();
 
-        parseE(); // Первый операнд
-
-        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL ) ) // Проверяем знак операции
-            throw "& needed";
-
-        Lexeme operation = currentLex; // Запоминаем текущую операцию
-
-        getNextLexeme();
-
-        parseE(); // Второй операнд
-
-        if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BRCLOSE ) // Проверяем закрывающую скобку
-            throw ") needed";
-
-        getNextLexeme();
-
-        program.push_back( Operation( Operation::BINARY, operation.index ) ); // Добавляем операцию в ПОЛИЗ
-    } else { // Иначе ошибка
-        throw "Start of expression needed";
+        program.push_back( Operation( Operation::BINARY, LEX_DEL_ADD ) ); // Добавляем операцию в ПОЛИЗ
     }
 }
 
