@@ -1,3 +1,7 @@
+/* В этой программе показан простейший вычислитель арифметических выражений, содержащих знаки + и *.
+Для внутреннего представления интерпретируемого выражения используется дерево в памяти.
+*/
+
 //#include "stdafx.h"
 #include <ctype.h> // Для функции isdigit, определяющей является ли символ цифрой
 #include <string.h> // Для функции сравнения строк strcmp
@@ -5,6 +9,9 @@
 
 #include <iostream> // Для ввода-вывода (std::сin и std::cout)
 #include <string> // Для std::string
+#include <vector> // Для std::vector
+#include <stack> // Для std::stack
+#include <cstdio> // Для функции getchar
 
 /* Итак, необходимо построить лексический анализатор, который разбивает входной
 поток на лексемы и классифицирует их.
@@ -59,6 +66,15 @@ public:
 
 };
 
+// Оператор вывод лексемы в поток
+std::ostream & operator <<(std::ostream & out, const Lexeme & lex) {
+    return out << "{" << lex.type   // Печатаем ее тип
+               << "," << lex.index  // Индекс
+               << "," << lex.buf    // Строку, в которой она накоплена
+               << "," << lex.value  // Числовое значение
+               << "}";
+}
+
 /* Функция для поиска строки в списке
 Она принимает первым аргументом строку C, а вторым -
 список строк, и если в этом списке есть такая же строка, как в
@@ -80,7 +96,7 @@ int find( const char * buf, const char * list[] ) {
 char currentChar; // Переменная для текущего символа
 
 void gc() { // Функция чтения следующего символа
-    std::cin >> currentChar;
+    currentChar = getchar();
 }
 
 
@@ -112,7 +128,7 @@ Lexeme readNextLexeme() {
         switch (currentState) { // В зависимости от текущего состояния
             case S: // Если мы в начальном состоянии
                  // Если у нас здесь пробельный символ, то мы его просто пропускаем
-                if ( currentChar == '_' ) {
+                if ( currentChar == ' ' ) {
                     gc(); // То есть считываем следующий
                     currentState = S; // И остаемся в том же состоянии
                 } else if ( isdigit( currentChar ) ) { // Если текущий символ - цифра
@@ -126,7 +142,7 @@ Lexeme readNextLexeme() {
                     int index = find( buf.c_str(), LEX_DELIMS ); // Находим этот разделитель в таблице
 
                     return Lexeme( LEX_DELIM, index, buf ); // И возвращаем соответствующую лексему
-                } else if ( currentChar == '$' ) { // Если символ - конец ввода
+                } else if ( currentChar == '\n' || currentChar == '\r' ) { // Если символ - конец ввода
                     return Lexeme( LEX_EOF, LEX_NULL, "$" ); // То возвращаем лексему конца ввода
                 } else { // Иначе - какой-то непонятный символ
                     buf += currentChar; // Добавляем его в строку-буфер
@@ -144,6 +160,13 @@ Lexeme readNextLexeme() {
                 break;
         };
     }
+}
+
+Lexeme currentLex; // Текущая лексема
+
+/* Функция получения следующей лексемы, тут синтаксический интерпретатор связан с лексическим */
+void getNextLexeme() {
+    currentLex = readNextLexeme(); // Обращаемся к лексическому анализатору
 }
 
 /* Абстрактный класс, представлющий узел выражения, который можно вычислить */
@@ -201,54 +224,54 @@ private:
     int value; // Значение константы
 };
 
-Lexeme currentLex; // Текущая лексема
+/* Разбор выражения */
 
-/* Функция получения следующей лексемы, тут синтаксический интерпретатор связан с лексическим */
-void getNextLexeme() {
-    currentLex = readNextLexeme(); // Обращаемся к лексическому анализатору
+ExpressionNode * parseG() {
+    if ( currentLex.type == LEX_NUMBER ) {
+        ExpressionNode * res =  new ConstNode( currentLex.value );
+
+        getNextLexeme();
+
+        return res;
+    } else {
+        throw "Number required";
+    }
 }
 
-/* Разбор выражения */
-ExpressionNode * parseE() {
-    if ( currentLex.type == LEX_NUMBER ) { // Если текущая лексема - число
-        ExpressionNode * node = new ConstNode( currentLex.value ); // Создаем узел, содержащий константу
+ExpressionNode * parseF() {
+    ExpressionNode * res = parseG();
 
+    while ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_MUL ) {
         getNextLexeme();
 
-        return node; // Возвращаем узел
-    } else if ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_BROPEN ) { // Если текущая лексема - скобка
-        getNextLexeme();
+        ExpressionNode * op = parseG();
 
-        ExpressionNode * arg1 = parseE(); // Первый операнд
-
-        if ( currentLex.type != LEX_DELIM || ( currentLex.index != LEX_DEL_ADD && currentLex.index != LEX_DEL_MUL ) ) // Проверяем знак операции
-            throw "& needed";
-
-        Lexeme operation = currentLex; // Запоминаем текущую операцию
-
-        getNextLexeme();
-
-        ExpressionNode * arg2 = parseE(); // Второй операнд
-
-        if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BRCLOSE ) // Проверяем закрывающую скобку
-            throw ") needed";
-
-        getNextLexeme();
-
-        return new BinaryOperationNode( operation.index, arg1, arg2 ); // Возвращаем узел с бинарной операцией
-    } else { // Иначе ошибка
-        throw "Start of expression needed";
+        res = new BinaryOperationNode( LEX_DEL_MUL, res, op );
     }
+
+    return res;
+}
+
+ExpressionNode * parseE() {
+    ExpressionNode * res = parseF();
+
+    while ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_ADD ) {
+        getNextLexeme();
+
+        ExpressionNode * op = parseF();
+
+        res = new BinaryOperationNode( LEX_DEL_ADD, res, op );
+    }
+
+    return res;
 }
 
 /* Разбор для начального состояния грамматики */
 ExpressionNode * parseS() {
-    ExpressionNode * node = parseE();
-
+    ExpressionNode * res = parseE();
     if ( currentLex.type != LEX_EOF ) // Проверяем конец цепочки
         throw "End of line needed";
-
-    return node;
+    return res;
 }
 
 int main(int argc, char ** argv) {
@@ -261,11 +284,7 @@ int main(int argc, char ** argv) {
         node = parseS(); // Парсим выражение, строим дерево
     } catch ( const char * err ) {
         std::cout << "Error parsing: " << err << ", but "
-             << "{" << currentLex.type // Печатаем ее тип
-             << "," << currentLex.index // Индекс
-             << "," << currentLex.buf // Строку, в которой она накоплена
-             << "," << currentLex.value // Булево значение
-             << "} got." << std::endl;
+             << currentLex << " got." << std::endl;
 
         return 1;
     }
