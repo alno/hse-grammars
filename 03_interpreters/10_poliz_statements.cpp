@@ -32,6 +32,8 @@ enum LexDelims {
     LEX_DEL_MUL, // Операция "*"
     LEX_DEL_BROPEN, // Открывающая скобка
     LEX_DEL_BRCLOSE, // Закрывающая скобка
+    LEX_DEL_BLOPEN,
+    LEX_DEL_BLCLOSE,
     LEX_DEL_EQUALS, // Знак равенства
     LEX_DEL_SEMICOLON, // Точка с запятой
     LEX_DEL_LESS, // Меньше
@@ -47,6 +49,8 @@ const char * LEX_DELIMS[] = {
     "*",
     "(",
     ")",
+    "{",
+    "}",
     "=",
     ";",
     "<", // Сравнение на меньше
@@ -57,7 +61,8 @@ const char * LEX_DELIMS[] = {
 // Какие бывают ключевые слова:
 enum LexKeywords {
     LEX_KW_NULL, // Для ошибки
-    LEX_KW_VAR // Объявление переменной
+    LEX_KW_VAR, // Объявление переменной
+    LEX_KW_IF // Условие
 };
 
 /* Перечисляем как записываются разделители - опять же порядок совпадает
@@ -65,6 +70,7 @@ enum LexKeywords {
 const char * LEX_KEYWORDS[] = {
     "",
     "var", // Объявление переменной
+    "if", // Условие
     0 // Заканчиваем список нулем, чтобы при поиске определять по нему конец
 };
 
@@ -87,6 +93,15 @@ public:
       value( value ) {}
 
 };
+
+// Оператор вывод лексемы в поток
+std::ostream & operator <<(std::ostream & out, const Lexeme & lex) {
+    return out << "{" << lex.type   // Печатаем ее тип
+               << "," << lex.index  // Индекс
+               << "," << lex.buf    // Строку, в которой она накоплена
+               << "," << lex.value  // Числовое значение
+               << "}";
+}
 
 /* Функция для поиска строки в списке
 Она принимает первым аргументом строку C, а вторым -
@@ -142,7 +157,7 @@ Lexeme readNextLexeme() {
         switch (currentState) { // В зависимости от текущего состояния
             case S: // Если мы в начальном состоянии
                  // Если у нас здесь пробельный символ, то мы его просто пропускаем
-                if ( currentChar == '_' || currentChar == ' ' ) {
+                if ( currentChar == ' ' ) {
                     gc(); // То есть считываем следующий
                     currentState = S; // И остаемся в том же состоянии
                 } else if ( isdigit( currentChar ) ) { // Если текущий символ - цифра
@@ -153,7 +168,7 @@ Lexeme readNextLexeme() {
                     buf += currentChar; // Тогда добавляем ее в буфер-накопитель лексемы
                     gc(); // Считываем следующий символ
                     currentState = W; // И переходим в состояние W - для ключевых слов и переменных
-                } else if ( currentChar == '$' ) { // Если символ - конец ввода
+                } else if ( currentChar == '\n' ) { // Если символ - конец ввода
                     return Lexeme( LEX_EOF, LEX_NULL, "$" ); // То возвращаем лексему конца ввода
                 } else { // Может быть это односимвольный разделитель?
                     buf += currentChar; // То добавляем его в строку-буфер
@@ -205,7 +220,8 @@ public:
         BINARY, // Бинарная операция
         UNARY, // Унарная операция
         ASSIGN, // Присваивание
-        VAR // Получение значения переменной
+        VAR, // Получение значения переменной
+        JMP_FALSE // Переход по false
     };
 
     Operation( int type, int data ) : type( type ), data( data ) {}
@@ -304,6 +320,24 @@ ExpType parseE() {
     }
 }
 
+void parseP();
+
+void parseQ() {
+    if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BLOPEN )
+        throw "Block open expected";
+
+    do {
+        getNextLexeme();
+
+        parseP();
+    } while ( currentLex.type == LEX_DELIM && currentLex.index == LEX_DEL_SEMICOLON );
+
+    if ( currentLex.type != LEX_DELIM || currentLex.index != LEX_DEL_BLCLOSE )
+        throw "BLock close needed";
+
+    getNextLexeme();
+}
+
 /* Разбор команды программы */
 void parseP() {
     if ( currentLex.type == LEX_KEYWORD && currentLex.index  == LEX_KW_VAR ) { // Объявление переменной
@@ -331,6 +365,17 @@ void parseP() {
         parseE();
 
         program.push_back( Operation( Operation::ASSIGN, varIndex ) );
+    } else if ( currentLex.type == LEX_KEYWORD && currentLex.index == LEX_KW_IF ) {
+        getNextLexeme();
+
+        parseE(); // Выражение в условии
+
+        program.push_back( Operation( Operation::JMP_FALSE, 0 ) );
+        int jumpPos = program.size() - 1; // Запоминаем позицию операции
+
+        parseQ(); // THEN-ветвь
+
+        program[jumpPos].data = program.size();
     } else {
         throw "Program statement expected";
     }
@@ -360,8 +405,10 @@ int calculate() {
 
     values.resize( variables.size() );
 
-    for ( int i = 0; i < program.size(); ++ i ) { // Для каждой операции
-        Operation op = program[i];
+    int currOp = 0;
+    while ( currOp < program.size() ) { // Для каждой операции
+        Operation op = program[currOp];
+        int nextOp = currOp + 1; // Следующая операция - следующая по порядку
 
         switch ( op.type ) { // В зависимости от типа
             case Operation::CONST: // Для константы
@@ -423,9 +470,20 @@ int calculate() {
                 stack.push( values[ op.data ] ); // Кладем в стек значение переменной
                 break;
             }
+            case Operation::JMP_FALSE:
+            {
+                int v1 = stack.top(); // Получаем первый аргумент из стека
+                stack.pop(); // И удаляем его из стека
+
+                if (!v1)
+                    nextOp = op.data;
+                break;
+            }
             default:
                 throw "Unknown operation type"; // Неизвестный тип операции
         }
+
+        currOp = nextOp;
     }
 
     return stack.top(); // Возвращаем верхнее значение в стеке
